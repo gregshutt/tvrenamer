@@ -22,7 +22,7 @@ opt_parser = OptionParser.new do |opts|
     exit
   end
 
-  opts.on "-k", "--dump-subtitles", "Instead of performing renaming, only extract the subtitles" do
+  opts.on "-k", "--keep-subtitles", "Instead of performing renaming, only extract the subtitles" do
     options[:skip] = true
   end
 
@@ -104,7 +104,13 @@ def main(options)
 		# use mkvextract to extract the .sub/.idx files
 		subtitle_tracks.each do |track_id, track_info|
 			print "  Extracting track ID #{track_id}..."
-			track_file = Tempfile.new('track')
+      
+      if options[:skip]
+        track_file = File.new(File.basename(video_basename, File.extname(video_basename)), 'w')
+      else
+        track_file = Tempfile.new('track')
+      end
+
 			begin
 				`mkvextract tracks '#{v}' #{track_id}:#{track_file.path}`
 				puts "done."
@@ -149,9 +155,12 @@ def main(options)
 			ensure
 				track_file.close
 
-        # keep files around when skip option is enabled
-        if ! options[:skip]
-          track_file.unlink
+        # clean up temporary files
+        begin
+          File.unlink(track_file.path)
+          File.unlink("#{track_file.path}.idx")
+          File.unlink("#{track_file.path}.sub")
+        rescue
         end
 			end
 
