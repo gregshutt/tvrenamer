@@ -17,10 +17,14 @@ opt_parser = OptionParser.new do |opts|
 		options[:external_decoder_host] = s
 	end
 
-    opts.on "-h", "--help", "Prints this help" do
-        puts opts
-        exit
-    end
+  opts.on "-h", "--help", "Prints this help" do
+    puts opts
+    exit
+  end
+
+  opts.on "-k", "--dump-subtitles", "Instead of performing renaming, only extract the subtitles" do
+    options[:skip] = true
+  end
 
 	opts.on "-p", "--pretend", "Don't actually perform renaming" do
 		options[:pretend] = true
@@ -52,32 +56,35 @@ end
 def main(options)
 	subtitles = {}
 
-	# load all the srt files
-	print "Loading SRT files..."
-	Dir.foreach(options[:subtitle_path]) do |item|
-		next if item == '.' || item == '..'
+  # don't load any subtitles if the skip option is set
+  if ! options[:skip]
+	  # load all the srt files
+    print "Loading SRT files..."
+    Dir.foreach(options[:subtitle_path]) do |item|
+      next if item == '.' || item == '..'
 
-		if ! options[:show].nil?
-			# skip files not related to this show
-			next if ! item.start_with? options[:show]
-		end
+      if ! options[:show].nil?
+        # skip files not related to this show
+        next if ! item.start_with? options[:show]
+      end
 
-		if ! options[:season].nil?
-			# skip files outside of the season
-			next if item !~ /S\d?#{options[:season]}E/
-		end
+      if ! options[:season].nil?
+        # skip files outside of the season
+        next if item !~ /S\d?#{options[:season]}E/
+      end
 
-		srt = SRT::File.parse(File.new("#{options[:subtitle_path]}/#{item}"))
+      srt = SRT::File.parse(File.new("#{options[:subtitle_path]}/#{item}"))
 
-		subtitles[item] = extract_srt_text(srt)
-	end
-	puts "done."
+      subtitles[item] = extract_srt_text(srt)
+    end
+    puts "done."
 
-	puts "Loaded #{subtitles.count} subtitles"
+    puts "Loaded #{subtitles.count} subtitles"
 
-	if subtitles.count == 0
-		raise "Could not load any subtitles"
-	end
+    if subtitles.count == 0
+		  raise "Could not load any subtitles"
+	  end
+  end
 
 	# go through each mkv file
 	options[:videos].each do |v|
@@ -141,16 +148,21 @@ def main(options)
 				end
 			ensure
 				track_file.close
-				track_file.unlink
+
+        # keep files around when skip option is enabled
+        if ! options[:skip]
+          track_file.unlink
+        end
 			end
 
 			puts "done."
 
-			print "    Searching for best match..."
-			
-			best_srt_file = find_best_match(subtitles, full_text)
-
-			puts "done."
+      best_srt_file = nil
+      if ! options[:skip]
+			  print "    Searching for best match..."
+			  best_srt_file = find_best_match(subtitles, full_text)
+			  puts "done."
+      end
 
 			if ! best_srt_file.nil?
 				# rename the file
